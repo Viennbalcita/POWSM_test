@@ -1,0 +1,8 @@
+espnet
+soundfile
+torch
+numpy
+librosa
+pathlib
+argparse
+logging

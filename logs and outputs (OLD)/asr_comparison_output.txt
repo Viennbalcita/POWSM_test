@@ -1,0 +1,79 @@
+
+Failed to import Flash Attention, using ESPnet default: No module named 'flash_attn'
+================================================================================
+POWSM ASR - Testing Multiple Segments of input 4.wav
+================================================================================
+
+Loading audio...
+Total duration: 544.4s
+
+Loading POWSM model...
+Fetching 12 files:   0%|          | 0/12 [00:00<?, ?it/s]
+Fetching 12 files: 100%|##########| 12/12 [00:00<?, ?it/s]
+Traceback (most recent call last):
+Model loaded!
+
+Testing segments...
+
+--------------------------------------------------------------------------------
+
+First 6s (0-6s) padded with silence:
+  Cleaned:  irlscout movement in the public schools by   ay   arsh...
+  Length: 55 chars
+
+10-16s with silence:
+  Cleaned: RECOR  N   ARE   N T  E   U  C   O  A  NE FRO     ORE   RO  AT  ON OR TO   A  UNTEER   EA  E   T   R...
+  Length: 105 chars
+
+20-26s with silence:
+  Cleaned:  UNE T  O T  OU  AN   TEN   R  COUT   O  E  ENT   N T  E   U  C ...
+  Length: 64 chars
+
+30-36s with silence:
+  Cleaned:  lovenia   tate Educational Association nineteen   eventeen...
+  Length: 59 chars
+
+First 6s (0-6s) padded with repetition:
+  Cleaned:  R  COUT   O  E  ENT   N T  E   U  C   C  OO        A     AR     R  COUT   O  E  ENT   N T  E   U  C...
+  Length: 189 chars
+
+--------------------------------------------------------------------------------
+
+SUMMARY:
+--------------------------------------------------------------------------------
+
+  File "V:\POWSM\asr_compare_segments.py", line 119, in <module>
+First 6s (0-6s) padded with repetition
+  Transcript length: 189 chars
+  Files: input4_seg00_repeat*.txt/.wav
+  Text:  R  COUT   O  E  ENT   N T  E   U  C   C  OO        A     AR     R  COUT   O  E  ENT   N T  E   U  C   C  OO        A     AR     R  COUT   O  E  ENT   N T  E   U  C   C  OO        A     AR 
+
+10-16s with silence
+  Transcript length: 105 chars
+  Files: input4_seg10_silence*.txt/.wav
+  Text: RECOR  N   ARE   N T  E   U  C   O  A  NE FRO     ORE   RO  AT  ON OR TO   A  UNTEER   EA  E   T   RO  O 
+
+20-26s with silence
+  Transcript length: 64 chars
+  Files: input4_seg20_silence*.txt/.wav
+  Text:  UNE T  O T  OU  AN   TEN   R  COUT   O  E  ENT   N T  E   U  C 
+
+30-36s with silence
+  Transcript length: 59 chars
+  Files: input4_seg30_silence*.txt/.wav
+  Text:  lovenia   tate Educational Association nineteen   eventeen
+
+First 6s (0-6s) padded with silence
+  Transcript length: 55 chars
+  Files: input4_seg00_silence*.txt/.wav
+  Text:  irlscout movement in the public schools by   ay   arsh
+
+================================================================================
+    print("\u2705 Comparison complete! Check output files for details.")
+  File "V:\POWSM\.venv\Lib\site-packages\wandb\sdk\lib\console_capture.py", line 184, in write_with_callbacks
+    n = orig_write(s)
+        ^^^^^^^^^^^^^
+  File "C:\Users\vienn\AppData\Local\Programs\Python\Python311\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>

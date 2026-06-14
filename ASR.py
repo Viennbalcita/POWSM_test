@@ -12,6 +12,7 @@ from typing import Optional
 # Optional high-quality resampler
 try:
     import librosa
+
     _HAS_LIBROSA = True
 except Exception:
     librosa = None
@@ -20,7 +21,9 @@ except Exception:
 
 def resample_audio(audio: np.ndarray, orig_sr: int, target_sr: int = 16000) -> np.ndarray:
     if orig_sr == target_sr:
-        print(f"Resampler: original sample rate {orig_sr} Hz equals target {target_sr} Hz — no resampling needed")
+        print(
+            f"Resampler: original sample rate {orig_sr} Hz equals target {target_sr} Hz — no resampling needed"
+        )
         return audio
 
     if audio.ndim > 1:
@@ -35,7 +38,9 @@ def resample_audio(audio: np.ndarray, orig_sr: int, target_sr: int = 16000) -> n
             print(f"Resampler: librosa failed ({e}), falling back to PyTorch linear resampler")
 
     # Fallback: linear interpolation via PyTorch
-    print(f"Resampler: using PyTorch linear interpolation to resample {orig_sr}Hz -> {target_sr}Hz (fallback)")
+    print(
+        f"Resampler: using PyTorch linear interpolation to resample {orig_sr}Hz -> {target_sr}Hz (fallback)"
+    )
     x = torch.from_numpy(audio.astype(np.float32))
     x = x.unsqueeze(0).unsqueeze(0)  # shape (1,1,T)
     new_len = int(round(x.shape[-1] * target_sr / orig_sr))
@@ -58,7 +63,10 @@ def trim_silence(audio: np.ndarray, threshold: float = 0.01, min_keep: int = 160
     trimmed = audio[start:end]
     if trimmed.shape[0] != audio.shape[0]:
         import logging
-        logging.info(f"Trimmed leading/trailing silence from {audio.shape[0]} to {trimmed.shape[0]} samples")
+
+        logging.info(
+            f"Trimmed leading/trailing silence from {audio.shape[0]} to {trimmed.shape[0]} samples"
+        )
     return trimmed
 
 
@@ -76,9 +84,11 @@ def apply_gain(audio: np.ndarray, target_rms: float = 0.08, max_peak: float = 0.
     if peak > max_peak and peak > 0:
         boosted = boosted * (max_peak / peak)
         import logging
+
         logging.info(f"Applied conservative gain and limited peak to {max_peak:.2f}")
     elif gain != 1.0:
         import logging
+
         logging.info(f"Applied RMS gain factor {gain:.2f}")
 
     return boosted
@@ -113,7 +123,9 @@ def estimate_noise_rms(audio: np.ndarray, sr: int, window_sec: float = 0.5):
     return float(rms_vals[idx]), int(starts[idx])
 
 
-def apply_noise_gate(audio: np.ndarray, noise_rms: float, mult: float = 3.0, attenuation: float = 0.1) -> np.ndarray:
+def apply_noise_gate(
+    audio: np.ndarray, noise_rms: float, mult: float = 3.0, attenuation: float = 0.1
+) -> np.ndarray:
     if audio.size == 0:
         return audio
     thresh = noise_rms * mult
@@ -122,17 +134,25 @@ def apply_noise_gate(audio: np.ndarray, noise_rms: float, mult: float = 3.0, att
         audio = audio.copy()
         audio[mask] = audio[mask] * attenuation
         import logging
+
         logging.info(f"Applied noise gate (threshold={thresh:.5f}, attenuation={attenuation})")
     return audio
 
 
 # Refactored for readability
 
+
 def prepare_audio_minimal(
     audio: np.ndarray,
     sample_rate: int,
+    target_sr: int = 16000,
+    duration_sec: float = 20.0,
 ) -> tuple:
-    """Minimal preprocessing matching demo notebook: convert to mono, pass raw (NO resampling)."""
+    """Canonical POWSM preprocessing only: mono -> resample to 16 kHz -> pad/truncate to 20 s.
+
+    No optional DSP (no trim/gain/gate/normalize) and minimal logging. This is the
+    exact input shape POWSM was trained on; feeding anything else degrades results.
+    """
     # Basic validation
     if audio is None or len(audio) == 0:
         raise ValueError("Audio array is empty")
@@ -140,14 +160,26 @@ def prepare_audio_minimal(
     if np.any(np.isnan(audio)) or np.any(np.isinf(audio)):
         raise ValueError("Audio contains NaN or Inf values")
 
-    # Mix to mono (same as notebook)
+    # Mix to mono
     if audio.ndim > 1:
         audio = audio.mean(axis=1)
-        print(f"[RAW MODE] Converted multi-channel audio to mono")
 
-    print(f"[RAW MODE] Audio shape: {audio.shape}, sample rate: {sample_rate} Hz")
-    print(f"[RAW MODE] Duration: {len(audio) / sample_rate:.2f}s")
-    
+    # Resample to 16 kHz (POWSM requirement)
+    if sample_rate != target_sr:
+        audio = resample_audio(audio, sample_rate, target_sr)
+        sample_rate = target_sr
+
+    # Pad (silence) or truncate to exactly 20 s
+    target_samples = int(target_sr * duration_sec)
+    if audio.shape[0] < target_samples:
+        audio = np.pad(
+            audio, (0, target_samples - audio.shape[0]), mode="constant", constant_values=0
+        )
+    elif audio.shape[0] > target_samples:
+        audio = audio[:target_samples]
+
+    print(f"[CANONICAL] mono, {target_sr} Hz, {duration_sec:.0f}s ({audio.shape[0]} samples)")
+
     return audio, sample_rate
 
 
@@ -206,7 +238,9 @@ def prepare_audio(
         e = min(s + int(0.5 * sample_rate), audio.shape[0])
         if audio.shape[0] - (e - s) > 0:
             signal_parts = np.concatenate([audio[:s], audio[e:]]) if s > 0 else audio[e:]
-            signal_rms = float(np.sqrt(np.mean(np.square(signal_parts)))) if signal_parts.size > 0 else 0.0
+            signal_rms = (
+                float(np.sqrt(np.mean(np.square(signal_parts)))) if signal_parts.size > 0 else 0.0
+            )
         else:
             signal_rms = float(np.sqrt(np.mean(np.square(audio))))
         if noise_rms > 0 and signal_rms > 0:
@@ -214,12 +248,16 @@ def prepare_audio(
             print(f"Estimated SNR (quietest-0.5s method): {snr:.1f} dB")
     except Exception as e:
         import logging
+
+        # Noise/SNR estimation is best-effort diagnostics only; a failure here
+        # must not abort preprocessing. Fall back to a neutral value.
         logging.error(f"Exception occurred in noise estimation: {e}")
         noise_rms = 0.0
-        raise
 
     if noise_gate_enabled and noise_rms > 0:
-        audio = apply_noise_gate(audio, noise_rms, mult=noise_gate_mult, attenuation=noise_gate_atten)
+        audio = apply_noise_gate(
+            audio, noise_rms, mult=noise_gate_mult, attenuation=noise_gate_atten
+        )
 
     # Amplitude and quality checks
     max_amplitude = float(np.max(np.abs(audio))) if audio.size > 0 else 0.0
@@ -258,15 +296,20 @@ def prepare_audio(
             repeats = (target_samples // audio.shape[0]) + 1
             audio = np.tile(audio, repeats)[:target_samples]
             import logging
+
             logging.info(f"Audio repeated to reach {duration_sec}s (pad_mode=repeat)")
         else:
             audio = np.pad(audio, (0, pad_len), mode="constant", constant_values=0)
             import logging
-            logging.info(f"Audio padded with {pad_len} samples ({pad_len/target_sr:.2f}s) to reach {duration_sec}s")
+
+            logging.info(
+                f"Audio padded with {pad_len} samples ({pad_len / target_sr:.2f}s) to reach {duration_sec}s"
+            )
     elif audio.shape[0] > target_samples:
         audio = audio[:target_samples]
 
     return audio, sample_rate
+
 
 task = "<asr>"
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -288,14 +331,18 @@ def build_pretrained_kwargs(device: str, lang_sym: str, task_sym: str):
     }
 
 
-def get_model(device: str = None, lang_sym: str = "<eng>", task_sym: str = "<asr>", model_id: str = MODEL_ID):
+def get_model(
+    device: str = None, lang_sym: str = "<eng>", task_sym: str = "<asr>", model_id: str = MODEL_ID
+):
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Loading model on device: {device}")
     print(f"Model id: {model_id}")
     pretrained_kwargs = build_pretrained_kwargs(device, lang_sym, task_sym)
 
     supported_params = set(inspect.signature(Speech2Text.from_pretrained).parameters)
-    filtered_kwargs = {key: value for key, value in pretrained_kwargs.items() if key in supported_params}
+    filtered_kwargs = {
+        key: value for key, value in pretrained_kwargs.items() if key in supported_params
+    }
 
     try:
         s2t = Speech2Text.from_pretrained(model_id, **filtered_kwargs)
@@ -310,9 +357,14 @@ def get_model(device: str = None, lang_sym: str = "<eng>", task_sym: str = "<asr
                 except Exception as e2:
                     print(f"Retry with base id failed: {e2}")
                     raise
+            else:
+                # No alternative id to try (model_id is already a base repo id) —
+                # surface the original error instead of falling through to an
+                # UnboundLocalError on s2t below.
+                raise
         else:
             raise
-    
+
     # CRITICAL: Set language and task symbols AFTER loading
     # These are not supported by from_pretrained(), must be set on the instance
     for attr, val in [("lang_sym", lang_sym), ("task_sym", task_sym)]:
@@ -322,7 +374,7 @@ def get_model(device: str = None, lang_sym: str = "<eng>", task_sym: str = "<asr
                 print(f"Set model.{attr} = {val}")
             except Exception as e:
                 print(f"Warning: could not set {attr}: {e}")
-    
+
     return s2t
 
 
@@ -333,7 +385,9 @@ def resolve_language_detector_model_id(model_id: str) -> str:
     return model_id
 
 
-def maybe_detect_language(audio: np.ndarray, device: str, lang_sym: str, task_sym: str, model_id: str) -> str:
+def maybe_detect_language(
+    audio: np.ndarray, device: str, lang_sym: str, task_sym: str, model_id: str
+) -> str:
     try:
         from espnet2.bin.s2t_inference_language import Speech2Language
     except Exception as e:
@@ -358,6 +412,7 @@ def maybe_detect_language(audio: np.ndarray, device: str, lang_sym: str, task_sy
         print(f"Language detection failed: {e}")
 
     return lang_sym
+
 
 def diagnose_audio_and_model(audio_path_str: str, model_id: str, lang_sym: str):
     audio_path = Path(audio_path_str)
@@ -387,14 +442,16 @@ def diagnose_audio_and_model(audio_path_str: str, model_id: str, lang_sym: str):
             print(f"Resample failed: {e}")
             return
     elif rate != 16000:
-        print(f"Info: rate {rate} != 16000 but librosa not available; will use fallback in prepare_audio")
+        print(
+            f"Info: rate {rate} != 16000 but librosa not available; will use fallback in prepare_audio"
+        )
         speech_16k = speech
     else:
         speech_16k = speech
 
     # Basic quality checks
     try:
-        noise = speech_16k[:int(0.5 * 16000)]
+        noise = speech_16k[: int(0.5 * 16000)]
         noise_std = np.std(noise) if noise.size > 0 else 0.0
         signal_std = np.std(speech_16k) if speech_16k.size > 0 else 0.0
         snr = 20 * math.log10((signal_std / (noise_std + 1e-9)) + 1e-9)
@@ -413,11 +470,15 @@ def diagnose_audio_and_model(audio_path_str: str, model_id: str, lang_sym: str):
     target_samples = 16000 * 20
     print(f"Target samples (20s @16k): {target_samples}")
     if speech_16k.shape[0] < target_samples:
-        print(f"Audio ({speech_16k.shape[0]}) < target ({target_samples}) — will pad with silence by default")
+        print(
+            f"Audio ({speech_16k.shape[0]}) < target ({target_samples}) — will pad with silence by default"
+        )
     elif speech_16k.shape[0] > target_samples:
         print(f"Audio will be truncated to {target_samples} samples (20s)")
 
-    active_lang_sym = maybe_detect_language(np.asarray(speech_16k), device=device, lang_sym=lang_sym, task_sym=task, model_id=model_id)
+    active_lang_sym = maybe_detect_language(
+        np.asarray(speech_16k), device=device, lang_sym=lang_sym, task_sym=task, model_id=model_id
+    )
     if active_lang_sym != lang_sym:
         print(f"Using detected language symbol: {active_lang_sym}")
 
@@ -474,7 +535,9 @@ def main(args):
     print(f"Original samples: {len(speech)}")
 
     if args.raw:
-        print("\n[RAW MODE ENABLED] Mirroring demo notebook: mono conversion only, NO resampling/padding/trimming/gain/normalization")
+        print(
+            "\n[RAW MODE ENABLED] Canonical-only preprocessing: mono -> resample 16 kHz -> pad/truncate 20 s, no optional DSP"
+        )
         speech, rate = prepare_audio_minimal(
             np.asarray(speech),
             rate,
@@ -499,12 +562,18 @@ def main(args):
 
     active_lang_sym = args.lang_sym
     if args.detect_language:
-        active_lang_sym = maybe_detect_language(np.asarray(speech), device=device, lang_sym=args.lang_sym, task_sym=task, model_id=args.model_id)
+        active_lang_sym = maybe_detect_language(
+            np.asarray(speech),
+            device=device,
+            lang_sym=args.lang_sym,
+            task_sym=task,
+            model_id=args.model_id,
+        )
         print(f"Using language symbol: {active_lang_sym}")
 
     # Ensure float32
     speech = speech.astype(np.float32)
-    
+
     # Skip normalization in --raw mode (matches notebook behavior)
     if not args.raw:
         max_val = float(np.max(np.abs(speech))) if speech.size else 0.0
@@ -527,7 +596,7 @@ def main(args):
 
     # Try several decode variants to avoid prompt-related early termination
     import re
-    
+
     if args.raw:
         # Notebook approach: single call with NO text_prev
         print("\n[RAW MODE] Single inference with NO text_prev (matching notebook)")
@@ -568,17 +637,19 @@ def main(args):
                 break
 
         if not found:
-            print("Warning: all decode attempts returned no transcript. Consider trying another model variant or check audio quality.")
+            print(
+                "Warning: all decode attempts returned no transcript. Consider trying another model variant or check audio quality."
+            )
             processed = ""
-    
+
     # Save transcript to file with fixed name
     output_file = Path(__file__).resolve().parent / "asr_transcript.txt"
-    with open(output_file, 'w', encoding='utf-8', errors='replace') as f:
+    with open(output_file, "w", encoding="utf-8", errors="replace") as f:
         f.write(processed if processed else "")
-    
-    print(f"\n{'='*80}")
+
+    print(f"\n{'=' * 80}")
     print("✅ ASR Processing Complete")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     print(f"Output file: asr_transcript.txt")
     print(f"Full path: {output_file.resolve()}")
     print(f"Transcript length: {len(processed) if processed else 0} characters")
@@ -590,21 +661,83 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run POWSM ASR with preprocessing and diagnostics")
-    parser.add_argument("--file", default="input 4.wav", help="Audio filename in the script directory")
-    parser.add_argument("--diagnose", action="store_true", help="Run diagnostics instead of full inference")
-    parser.add_argument("--raw", action="store_true", help="Skip all preprocessing (minimal: resample + pad/truncate only)")
-    parser.add_argument("--normalize", action="store_true", help="Normalize audio before inference")
-    parser.add_argument("--no-trim-silence", dest="trim_silence", action="store_false", help="Disable trimming leading/trailing silence")
-    parser.add_argument("--no-gain-boost", dest="gain_boost", action="store_false", help="Disable conservative RMS gain boosting")
-    parser.add_argument("--pad-mode", dest="pad_mode", choices=["silence", "repeat"], default="silence", help="How to pad short audio")
-    parser.add_argument("--lang-sym", dest="lang_sym", default="<eng>", help="Language symbol for model")
-    parser.add_argument("--detect-language", dest="detect_language", action="store_true", help="Attempt best-effort language detection before inference")
-    parser.add_argument("--no-detect-language", dest="detect_language", action="store_false", help="Disable automatic language detection")
-    parser.add_argument("--model-id", default=MODEL_ID, choices=["espnet/powsm", "espnet/powsm_ctc", "espnet/powsm/textnorm_retrained"], help="POWSM model variant to load")
-    parser.add_argument("--noise-gate", dest="noise_gate", action="store_true", help="Enable simple noise-gate preprocessing")
-    parser.add_argument("--noise-gate-mult", dest="noise_gate_mult", type=float, default=3.0, help="Noise gate threshold multiplier of estimated noise RMS")
-    parser.add_argument("--noise-gate-atten", dest="noise_gate_atten", type=float, default=0.1, help="Noise gate attenuation factor for samples below threshold")
-    parser.set_defaults(trim_silence=True, gain_boost=True, detect_language=True)
+    parser.add_argument(
+        "--file", default="download.wav", help="Audio filename in the script directory"
+    )
+    parser.add_argument(
+        "--diagnose", action="store_true", help="Run diagnostics instead of full inference"
+    )
+    parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="Canonical-only preprocessing: mono -> resample 16 kHz -> pad/truncate 20 s, no optional DSP, minimal logging",
+    )
+    parser.add_argument(
+        "--normalize",
+        action="store_true",
+        help="Opt-in: peak-normalize audio (off by default; not part of canonical pipeline)",
+    )
+    parser.add_argument(
+        "--trim-silence",
+        dest="trim_silence",
+        action="store_true",
+        help="Opt-in: trim leading/trailing silence (off by default; not part of canonical pipeline)",
+    )
+    parser.add_argument(
+        "--gain-boost",
+        dest="gain_boost",
+        action="store_true",
+        help="Opt-in: conservative RMS gain boost (off by default; not part of canonical pipeline)",
+    )
+    parser.add_argument(
+        "--pad-mode",
+        dest="pad_mode",
+        choices=["silence", "repeat"],
+        default="silence",
+        help="How to pad short audio",
+    )
+    parser.add_argument(
+        "--lang-sym", dest="lang_sym", default="<eng>", help="Language symbol for model"
+    )
+    parser.add_argument(
+        "--detect-language",
+        dest="detect_language",
+        action="store_true",
+        help="Attempt best-effort language detection before inference",
+    )
+    parser.add_argument(
+        "--no-detect-language",
+        dest="detect_language",
+        action="store_false",
+        help="Disable automatic language detection",
+    )
+    parser.add_argument(
+        "--model-id",
+        default=MODEL_ID,
+        choices=["espnet/powsm", "espnet/powsm_ctc", "espnet/powsm/textnorm_retrained"],
+        help="POWSM model variant to load",
+    )
+    parser.add_argument(
+        "--noise-gate",
+        dest="noise_gate",
+        action="store_true",
+        help="Enable simple noise-gate preprocessing",
+    )
+    parser.add_argument(
+        "--noise-gate-mult",
+        dest="noise_gate_mult",
+        type=float,
+        default=3.0,
+        help="Noise gate threshold multiplier of estimated noise RMS",
+    )
+    parser.add_argument(
+        "--noise-gate-atten",
+        dest="noise_gate_atten",
+        type=float,
+        default=0.1,
+        help="Noise gate attenuation factor for samples below threshold",
+    )
+    parser.set_defaults(trim_silence=False, gain_boost=False, detect_language=True)
     args = parser.parse_args()
 
     try:

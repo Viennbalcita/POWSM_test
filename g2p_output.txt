@@ -1,0 +1,11 @@
+================================================================================
+G2P (Grapheme to Phoneme) Conversion Output
+================================================================================
+
+[Original Text]
+FORMULATING THE GOOD A GOOD RESEARCH QUESTION OKAY SO MOST OF THE TIME FOR TODAY SESSION I'LL BE YAPPING THAT'S BASICALLY WHAT I WANTED TO SAY I'LL BE YAPPING WE ARE NOW IN WEEK THREE NOTHING TO WORRY IN MY OPINION SO FAR
+
+[Phoneme Output]
+fɔɹjudʒeɪtɪ̃ŋðəsʊkəstʌvðəθifɔɹtʰəseɪhiɑ̃naʊ
+
+================================================================================

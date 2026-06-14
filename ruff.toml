@@ -1,0 +1,7 @@
+# Ruff config for POWSM. Format: `ruff format .`  Lint: `ruff check .`
+line-length = 100
+target-version = "py312"
+
+[lint]
+# pycodestyle errors, pyflakes, isort, pyupgrade, bugbear
+select = ["E", "F", "I", "UP", "B"]
